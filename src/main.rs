@@ -79,6 +79,7 @@ mod commands {
             })
             .with_context(failed_context)?;
 
+        let _ = 0;
         io::copy(
             &mut ZlibDecoder::new(fs::File::open(entry.path())?),
             &mut io::stdout(),
