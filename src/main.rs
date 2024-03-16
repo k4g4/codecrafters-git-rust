@@ -47,22 +47,25 @@ fn main() -> Result<()> {
 
 mod commands {
     use anyhow::{bail, ensure, Context, Result};
-    use flate2::read::ZlibDecoder;
+    use flate2::read::{ZlibDecoder, ZlibEncoder};
     use nom::{
         bytes::complete::tag,
         character::complete::{char, digit1},
     };
     use sha1::{Digest, Sha1};
     use std::{
+        ffi::OsString,
         fs,
         io::{self, Read, Write},
-        path::Path,
+        path::{Path, PathBuf},
     };
 
     const DOT_GIT: &str = ".git";
     const OBJECTS: &str = "objects";
     const REFS: &str = "refs";
     const HEAD: &str = "HEAD";
+
+    const SHA_LEN: usize = 40;
 
     /// Initializes a new git repository by creating the .git directory and its subdirectories
     pub fn init(path: impl AsRef<Path>) -> Result<()> {
@@ -98,19 +101,24 @@ mod commands {
         let entry = entries
             .filter_map(Result::ok)
             .find(|entry| {
-                entry
-                    .file_name()
-                    .as_os_str()
-                    .to_string_lossy()
-                    .starts_with(sha_file)
+                entry.file_name().len() == SHA_LEN - 2
+                    && entry
+                        .file_name()
+                        .as_os_str()
+                        .to_string_lossy()
+                        .starts_with(sha_file)
             })
             .with_context(failed_context)?;
 
+        // possible optimization: read up to the filesize,
+        // then perform just one allocation for the next read
         let mut blob = vec![];
         ZlibDecoder::new(fs::File::open(entry.path())?).read_to_end(&mut blob)?;
 
         let contents = parse_blob(blob.as_slice()).context("failed to parse object file")?;
-        io::stdout().write(contents)?;
+
+        let mut stdout = io::stdout().lock();
+        stdout.write(contents)?;
 
         Ok(())
     }
@@ -120,13 +128,16 @@ mod commands {
         let Ok((blob, _)) = tag::<_, _, ()>(b"blob ")(blob) else {
             bail!("object file is not a blob")
         };
+
         let Ok((blob, size)) = digit1::<_, ()>(blob) else {
             bail!("invalid blob size in object file")
         };
+
         let size = std::str::from_utf8(size)
             .context("invalid blob size in object file")?
             .parse::<usize>()
             .context("failed to parse blob size")?;
+
         let Ok((blob, _)) = char::<_, ()>('\0')(blob) else {
             bail!("unexpected character in object file")
         };
@@ -135,7 +146,7 @@ mod commands {
         Ok(blob)
     }
 
-    pub fn hash_object(path: impl AsRef<Path>, _write: bool) -> Result<()> {
+    pub fn hash_object(path: impl AsRef<Path>, write: bool) -> Result<()> {
         let contents = fs::read(path.as_ref())?;
         let header = format!("blob {}\0", contents.len());
 
@@ -147,10 +158,42 @@ mod commands {
         )?;
 
         let digest = hasher.finalize();
-        for byte in digest {
+        for byte in &digest {
             print!("{byte:02x}");
         }
         println!();
+
+        if write {
+            let mut path: PathBuf = [DOT_GIT, OBJECTS, &format!("{:02x}", &digest[0])]
+                .iter()
+                .collect();
+
+            if let Err(error) = fs::create_dir(&path) {
+                ensure!(
+                    error.kind() == io::ErrorKind::AlreadyExists,
+                    "failed to create object subdirectory"
+                );
+            }
+
+            path.push({
+                use std::fmt::Write; //here to prevent conflict with io::Write
+
+                let mut filename = OsString::new();
+                for byte in &digest[1..] {
+                    write!(&mut filename, "{byte:02x}")?;
+                }
+                filename
+            });
+
+            let mut file = fs::File::create(path)?;
+
+            let mut compressor = ZlibEncoder::new(
+                header.as_bytes().chain(contents.as_slice()),
+                Default::default(), // default compression is level 6
+            );
+
+            io::copy(&mut compressor, &mut file)?;
+        }
 
         Ok(())
     }
