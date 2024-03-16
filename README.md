@@ -1,5 +1,5 @@
 # NOTE
-This is a codecrafters.io challenge project, pulled from codecrafters-io/build-your-own-git.
+This is a codecrafters.io challenge project, pulled from https://github.com/codecrafters-io/build-your-own-git.
 
 # CodeCrafters Readme
 
