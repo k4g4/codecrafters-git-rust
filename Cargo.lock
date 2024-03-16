@@ -379,6 +379,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
+name = "git-starter-rust"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "flate2",
+ "hex",
+ "reqwest",
+ "sha1",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -958,21 +973,6 @@ checksum = "05ffd9c0a93b7543e062e759284fcf5f5e3b098501104bfbdde4d404db792871"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "spit"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "clap",
- "flate2",
- "hex",
- "reqwest",
- "sha1",
- "thiserror",
- "tokio",
 ]
 
 [[package]]
