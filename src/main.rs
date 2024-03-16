@@ -12,12 +12,26 @@ struct Cli {
 #[derive(Subcommand)]
 enum Subcommands {
     /// Initialize an empty repository
-    Init { path: Option<PathBuf> },
+    Init {
+        /// Path to use for initializing the repository
+        path: Option<PathBuf>,
+    },
 
     /// Print the contents of a blob object
     CatFile {
+        /// The object's hash
         #[arg(short = 'p')]
         blob_sha: String,
+    },
+
+    /// Compute SHA hash of an object
+    HashObject {
+        /// Write the object to the .git database
+        #[arg(short = 'w', default_value_t = false)]
+        write: bool,
+
+        /// Path to the object
+        path: PathBuf,
     },
 }
 
@@ -27,6 +41,7 @@ fn main() -> Result<()> {
     match cli.command {
         Subcommands::Init { path } => commands::init(path.unwrap_or_else(|| ".".into())),
         Subcommands::CatFile { blob_sha } => commands::cat_file(&blob_sha),
+        Subcommands::HashObject { write, path } => commands::hash_object(path, write),
     }
 }
 
@@ -37,6 +52,7 @@ mod commands {
         bytes::complete::tag,
         character::complete::{char, digit1},
     };
+    use sha1::{Digest, Sha1};
     use std::{
         fs,
         io::{self, Read, Write},
@@ -67,15 +83,14 @@ mod commands {
     pub fn cat_file(blob_sha: &str) -> Result<()> {
         let failed_context = || format!("failed to find {blob_sha}");
 
+        ensure!(blob_sha.len() > 3, "object hash is not long enough");
+        let (sha_dir, sha_file) = blob_sha.split_at(2);
+
         let entries = fs::read_dir(Path::new(DOT_GIT).join(OBJECTS))?;
 
         let entry = entries
             .filter_map(Result::ok)
-            .find(|entry| {
-                blob_sha
-                    .get(..2)
-                    .is_some_and(|sha_dir| sha_dir == entry.file_name())
-            })
+            .find(|entry| sha_dir == entry.file_name())
             .with_context(failed_context)?;
 
         let entries = fs::read_dir(entry.path())?;
@@ -83,9 +98,11 @@ mod commands {
         let entry = entries
             .filter_map(Result::ok)
             .find(|entry| {
-                blob_sha
-                    .get(2..)
-                    .is_some_and(|sha_file| sha_file == entry.file_name())
+                entry
+                    .file_name()
+                    .as_os_str()
+                    .to_string_lossy()
+                    .starts_with(sha_file)
             })
             .with_context(failed_context)?;
 
@@ -116,6 +133,26 @@ mod commands {
         ensure!(blob.len() == size, "blob size is incorrect");
 
         Ok(blob)
+    }
+
+    pub fn hash_object(path: impl AsRef<Path>, _write: bool) -> Result<()> {
+        let contents = fs::read(path.as_ref())?;
+        let header = format!("blob {}\0", contents.len());
+
+        let mut hasher = Sha1::new();
+
+        io::copy(
+            &mut header.as_bytes().chain(contents.as_slice()),
+            &mut hasher,
+        )?;
+
+        let digest = hasher.finalize();
+        for byte in digest {
+            print!("{byte:02x}");
+        }
+        println!();
+
+        Ok(())
     }
 }
 
