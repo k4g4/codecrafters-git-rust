@@ -31,9 +31,17 @@ fn main() -> Result<()> {
 }
 
 mod commands {
-    use anyhow::{Context, Result};
+    use anyhow::{bail, ensure, Context, Result};
     use flate2::read::ZlibDecoder;
-    use std::{fs, io, path::Path};
+    use nom::{
+        bytes::complete::tag,
+        character::complete::{char, digit1},
+    };
+    use std::{
+        fs,
+        io::{self, Read, Write},
+        path::Path,
+    };
 
     const DOT_GIT: &str = ".git";
     const OBJECTS: &str = "objects";
@@ -79,13 +87,32 @@ mod commands {
             })
             .with_context(failed_context)?;
 
-        let _ = 0;
-        io::copy(
-            &mut ZlibDecoder::new(fs::File::open(entry.path())?),
-            &mut io::stdout(),
-        )?;
+        let mut blob = vec![];
+        ZlibDecoder::new(fs::File::open(entry.path())?).read_to_end(&mut blob)?;
+
+        let contents = parse_blob(blob.as_slice()).context("failed to parse object file")?;
+        io::stdout().write(contents)?;
 
         Ok(())
+    }
+
+    fn parse_blob(blob: &[u8]) -> Result<&[u8]> {
+        let Ok((blob, _)) = tag::<_, _, ()>(b"blob ")(blob) else {
+            bail!("object file is not a blob")
+        };
+        let Ok((blob, size)) = digit1::<_, ()>(blob) else {
+            bail!("invalid blob size in object file")
+        };
+        let size = std::str::from_utf8(size)
+            .context("invalid blob size in object file")?
+            .parse::<usize>()
+            .context("failed to parse blob size")?;
+        let Ok((blob, _)) = char::<_, ()>('\0')(blob) else {
+            bail!("unexpected character in object file")
+        };
+        ensure!(blob.len() == size, "blob size is incorrect");
+
+        Ok(blob)
     }
 }
 
