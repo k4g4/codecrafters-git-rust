@@ -1,3 +1,8 @@
+# NOTE
+This is a codecrafters.io challenge project, pulled from codecrafters-io/build-your-own-git.
+
+# CodeCrafters Readme
+
 [![progress-banner](https://backend.codecrafters.io/progress/git/bdd94a99-bc3e-46d0-99d3-e30fe6bf1e04)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
 This is a starting point for Rust solutions to the
