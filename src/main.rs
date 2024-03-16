@@ -48,6 +48,7 @@ mod commands {
     const REFS: &str = "refs";
     const HEAD: &str = "HEAD";
 
+    /// Initializes a new git repository by creating the .git directory and its subdirectories
     pub fn init(path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref().join(DOT_GIT);
 
@@ -62,6 +63,7 @@ mod commands {
         Ok(())
     }
 
+    /// Prints the contents of a blob object if it exists in .git
     pub fn cat_file(blob_sha: &str) -> Result<()> {
         let failed_context = || format!("failed to find {blob_sha}");
 
@@ -96,6 +98,7 @@ mod commands {
         Ok(())
     }
 
+    /// Blob object contents parsed using nom
     fn parse_blob(blob: &[u8]) -> Result<&[u8]> {
         let Ok((blob, _)) = tag::<_, _, ()>(b"blob ")(blob) else {
             bail!("object file is not a blob")
