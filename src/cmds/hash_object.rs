@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     path::PathBuf,
 };
 
@@ -8,7 +8,7 @@ use anyhow::ensure;
 use flate2::read::ZlibEncoder;
 use sha1::{Digest, Sha1};
 
-use crate::{DOT_GIT, OBJECTS, SHA_DISPLAY_LEN};
+use crate::{utils, DOT_GIT, OBJECTS, SHA_DISPLAY_LEN};
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -48,7 +48,7 @@ impl From<SourceArgs> for Source {
 
 /// Prints the sha1 hash of a file, and writes it to the .git
 /// database if `write == true`.
-pub fn hash_object(source: Source, write: bool) -> anyhow::Result<()> {
+pub fn hash_object(source: Source, write: bool, mut output: impl Write) -> anyhow::Result<()> {
     let contents = match source {
         Source::Path(path) => fs::read(path)?,
         Source::Stdin => {
@@ -71,9 +71,9 @@ pub fn hash_object(source: Source, write: bool) -> anyhow::Result<()> {
 
     let digest = hasher.finalize();
     for byte in &digest {
-        print!("{byte:02x}");
+        write!(output, "{byte:02x}")?;
     }
-    println!();
+    writeln!(output)?;
 
     if write {
         let mut path: PathBuf = [DOT_GIT, OBJECTS, &format!("{:02x}", &digest[0])]

@@ -1,3 +1,5 @@
+use std::io;
+
 use clap::{Parser, Subcommand};
 
 mod cmds;
@@ -32,22 +34,26 @@ enum Cmd {
 
     /// List tree object contents
     LsTree(cmds::ls_tree::Args),
+
+    /// Write a tree object to the .git database
+    WriteTree(cmds::write_tree::Args),
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let stdout = io::stdout().lock();
 
     match cli.cmd {
         Cmd::Init(cmds::init::Args { path }) => {
-            cmds::init::init(path.unwrap_or_else(|| ".".into()))
+            cmds::init::init(path.unwrap_or_else(|| ".".into()), stdout)
         }
 
         Cmd::CatFile(cmds::cat_file::Args { info, hash }) => {
-            cmds::cat_file::cat_file(info.into(), &hash, None)
+            cmds::cat_file::cat_file(info.into(), &hash, stdout)
         }
 
         Cmd::HashObject(cmds::hash_object::Args { write, source }) => {
-            cmds::hash_object::hash_object(source.into(), write)
+            cmds::hash_object::hash_object(source.into(), write, stdout)
         }
 
         Cmd::LsTree(cmds::ls_tree::Args {
@@ -56,6 +62,8 @@ fn main() -> anyhow::Result<()> {
             name_only,
             abbrev,
             hash,
-        }) => cmds::ls_tree::ls_tree(recurse, trees_only, name_only, abbrev, &hash, None),
+        }) => cmds::ls_tree::ls_tree(recurse, trees_only, name_only, abbrev, &hash, stdout),
+
+        Cmd::WriteTree(cmds::write_tree::Args {}) => cmds::write_tree::write_tree(stdout),
     }
 }

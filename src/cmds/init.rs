@@ -1,6 +1,7 @@
 use anyhow::Context;
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -13,7 +14,7 @@ pub struct Args {
 }
 
 /// Initializes a new git repository by creating the .git directory and its subdirectories.
-pub fn init(path: impl AsRef<Path>) -> anyhow::Result<()> {
+pub fn init(path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()> {
     let path = path.as_ref().join(DOT_GIT);
 
     fs::create_dir(&path)
@@ -22,7 +23,7 @@ pub fn init(path: impl AsRef<Path>) -> anyhow::Result<()> {
         .and_then(|_| fs::write(path.join(HEAD), "ref: refs/heads/main\n"))
         .with_context(|| format!("failed to initialize {}", path.display()))?;
 
-    println!("Initialized git directory");
+    writeln!(output, "Initialized git directory");
 
     Ok(())
 }

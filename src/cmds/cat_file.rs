@@ -2,7 +2,7 @@ use flate2::read::ZlibDecoder;
 
 use std::{
     fs,
-    io::{self, Read, Write},
+    io::{Read, Write},
 };
 
 use crate::{parsing, utils};
@@ -56,13 +56,10 @@ impl From<InfoArgs> for Info {
 }
 
 /// Prints an object's type, size, or contents if it exists in the .git database.
-pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyhow::Result<()> {
+pub fn cat_file(info: Info, hash: &str, mut output: impl Write) -> anyhow::Result<()> {
     let path = utils::find_object(hash)?;
 
     let mut decoder = ZlibDecoder::new(fs::File::open(path)?);
-
-    let mut stdout = None;
-    let writer = output.unwrap_or_else(|| stdout.insert(io::stdout().lock()));
 
     match info {
         Info::Type => {
@@ -72,7 +69,7 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyho
                 decoder.read(&mut buf[count..])?;
             }
             let (_, r#type) = parsing::parse_type(&buf)?;
-            write!(writer, "{type}")?;
+            write!(output, "{type}")?;
         }
 
         Info::Size => {
@@ -82,7 +79,7 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyho
                 decoder.read(&mut buf[count..])?;
             }
             let (_, parsing::Header { size, .. }) = parsing::parse_header(&buf)?;
-            write!(writer, "{size}")?;
+            write!(output, "{size}")?;
         }
 
         Info::Print => {
@@ -94,9 +91,9 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyho
 
             // dispatch to ls_tree for tree objects
             if matches!(r#type, parsing::Type::Tree) {
-                super::ls_tree::ls_tree(false, false, false, 20, hash, Some(writer))?;
+                super::ls_tree::ls_tree(false, false, false, 20, hash, output)?;
             } else {
-                writer.write(contents)?;
+                output.write(contents)?;
             }
         }
     }

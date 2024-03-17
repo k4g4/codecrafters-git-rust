@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::Write;
 
 use anyhow::ensure;
 
@@ -35,12 +35,9 @@ pub fn ls_tree(
     name_only: bool,
     abbrev: u8,
     hash: &str,
-    output: Option<&mut dyn Write>,
+    mut output: impl Write,
 ) -> anyhow::Result<()> {
     ensure!(abbrev <= SHA_LEN as u8, "abbrev value must be <= {SHA_LEN}");
-
-    let mut stdout = None;
-    let writer = output.unwrap_or_else(|| stdout.insert(io::stdout().lock()));
 
     for entry in utils::tree_level(hash, recurse)? {
         entry.display.set(Some(EntryDisplay {
@@ -48,7 +45,7 @@ pub fn ls_tree(
             name_only,
             abbrev,
         }));
-        write!(writer, "{entry}")?;
+        write!(output, "{entry}")?;
     }
 
     Ok(())
