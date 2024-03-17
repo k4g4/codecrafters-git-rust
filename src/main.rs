@@ -30,7 +30,9 @@ fn main() -> Result<()> {
             commands::init(path.unwrap_or_else(|| ".".into()))
         }
 
-        Subcommands::CatFile(commands::CatFileArgs { blob_sha }) => commands::cat_file(&blob_sha),
+        Subcommands::CatFile(commands::CatFileArgs { blob_sha }) => {
+            commands::cat_file(&blob_sha, None)
+        }
 
         Subcommands::HashObject(commands::HashObjectArgs { write, path }) => {
             commands::hash_object(path, write)
@@ -105,5 +107,14 @@ mod tests {
         )
         .unwrap()
         .is_file());
+
+        let mut output = vec![];
+        commands::cat_file(
+            "dbe9dba55ea8fd4d5be3868b015e044be0848ec5",
+            Some(&mut output),
+        )
+        .unwrap();
+
+        assert_eq!(output, b"Hello, world");
     }
 }

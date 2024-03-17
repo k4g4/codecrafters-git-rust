@@ -21,7 +21,7 @@ pub struct CatFileArgs {
 }
 
 /// Prints the contents of a blob object if it exists in .git
-pub fn cat_file(blob_sha: &str) -> Result<()> {
+pub fn cat_file(blob_sha: &str, output: Option<&mut Vec<u8>>) -> Result<()> {
     let failed_context = || format!("failed to find {blob_sha}");
 
     ensure!(blob_sha.len() > 3, "object hash is not long enough");
@@ -55,8 +55,12 @@ pub fn cat_file(blob_sha: &str) -> Result<()> {
 
     let contents = parse_blob(blob.as_slice()).context("failed to parse object file")?;
 
-    let mut stdout = io::stdout().lock();
-    stdout.write(contents)?;
+    if let Some(output) = output {
+        output.write(contents)?;
+    } else {
+        let mut stdout = io::stdout().lock();
+        stdout.write(contents)?;
+    }
 
     Ok(())
 }
