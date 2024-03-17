@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{ensure, Result};
+use anyhow::ensure;
 use flate2::read::ZlibEncoder;
 use sha1::{Digest, Sha1};
 
@@ -13,16 +13,16 @@ use crate::cmds::{DOT_GIT, OBJECTS, SHA_LEN};
 #[derive(clap::Args)]
 pub struct Args {
     /// Write the object to the .git database
-    #[arg(short, default_value_t = false)]
+    #[arg(short)]
     pub write: bool,
 
     #[command(flatten)]
-    pub source: HashObjectSourceArgs,
+    pub source: SourceArgs,
 }
 
 #[derive(clap::Args)]
 #[group(required = true, multiple = false)]
-pub struct HashObjectSourceArgs {
+pub struct SourceArgs {
     /// Path to the object
     pub path: Option<PathBuf>,
 
@@ -36,8 +36,8 @@ pub enum Source {
     Stdin,
 }
 
-impl From<HashObjectSourceArgs> for Source {
-    fn from(HashObjectSourceArgs { path, stdin }: HashObjectSourceArgs) -> Self {
+impl From<SourceArgs> for Source {
+    fn from(SourceArgs { path, stdin }: SourceArgs) -> Self {
         match (path, stdin) {
             (None, true) => Self::Stdin,
             (Some(path), false) => Self::Path(path),
@@ -48,7 +48,7 @@ impl From<HashObjectSourceArgs> for Source {
 
 /// Prints the sha1 hash of a file, and writes it to the .git
 /// database if `write == true`.
-pub fn hash_object(source: Source, write: bool) -> Result<()> {
+pub fn hash_object(source: Source, write: bool) -> anyhow::Result<()> {
     let contents = match source {
         Source::Path(path) => fs::read(path)?,
         Source::Stdin => {

@@ -1,7 +1,7 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod cmds;
+mod parsing;
 
 /// A simple clone of git
 #[derive(Parser)]
@@ -22,7 +22,7 @@ enum Subcommands {
     HashObject(cmds::hash_object::Args),
 }
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.cmd {

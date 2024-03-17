@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -13,7 +13,7 @@ pub struct Args {
 }
 
 /// Initializes a new git repository by creating the .git directory and its subdirectories.
-pub fn init(path: impl AsRef<Path>) -> Result<()> {
+pub fn init(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let path = path.as_ref().join(DOT_GIT);
 
     fs::create_dir(&path)

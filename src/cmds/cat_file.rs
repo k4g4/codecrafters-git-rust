@@ -1,17 +1,16 @@
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context};
 use flate2::read::ZlibDecoder;
-use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    character::complete::{char, digit1},
-};
+
 use std::{
     fs,
     io::{self, Read, Write},
     path::Path,
 };
 
-use crate::cmds::{DOT_GIT, OBJECTS, SHA_LEN};
+use crate::{
+    cmds::{DOT_GIT, OBJECTS, SHA_LEN},
+    parsing,
+};
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -62,7 +61,7 @@ impl From<InfoArgs> for Info {
 }
 
 /// Prints an object's type, size, or contents if it exists in the .git database.
-pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> Result<()> {
+pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyhow::Result<()> {
     let failed_context = || format!("failed to find {hash}");
 
     ensure!(hash.len() > 3, "object hash is not long enough");
@@ -97,19 +96,25 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> Resul
     match info {
         Info::Type => {
             let mut buf = [0u8; 64];
-            decoder.read_exact(&mut buf)?;
-            let (_, r#type) = parse_type(&buf)?;
-            writer.write(r#type)?;
+            let count = decoder.read(&mut buf)?;
+            if count < 16 {
+                decoder.read(&mut buf[count..])?;
+            }
+            let (_, r#type) = parsing::parse_type(&buf)?;
+            write!(writer, "{type}")?;
         }
 
         Info::Size => {
             let mut buf = [0u8; 64];
-            decoder.read_exact(&mut buf)?;
-            let (buf, _) = parse_type(&buf)?;
-            let (buf, _) = char::<_, ()>(' ')(buf)
+            let count = decoder.read(&mut buf)?;
+            if count < 16 {
+                decoder.read(&mut buf[count..])?;
+            }
+            let (buf, _) = parsing::parse_type(&buf)?;
+            let (buf, _) = nom::character::complete::char::<_, ()>(' ')(buf)
                 .map_err(|_| anyhow!("unexpected character in object file"))?;
-            let (_, size) = parse_size(&buf)?;
-            write!(writer, "{size}")?;
+            let (_, header) = parsing::parse_header(&buf)?;
+            write!(writer, "{}", header.size)?;
         }
 
         Info::Print => {
@@ -117,59 +122,10 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> Resul
             // then perform just one allocation for the next read
             let mut buf = vec![];
             decoder.read_to_end(&mut buf)?;
-            let contents = parse_contents(buf.as_slice())?;
+            let (contents, _) = parsing::parse_contents(buf.as_slice())?;
             writer.write(contents)?;
         }
     }
 
     Ok(())
-}
-
-/// Object type parsed using nom
-fn parse_type(object: &[u8]) -> Result<(&[u8], &[u8])> {
-    let mut object_type = alt((
-        tag::<_, _, ()>(b"blob"),
-        tag(b"tree"),
-        tag(b"commit"),
-        tag(b"tag"),
-    ));
-
-    let Ok((object, r#type)) = object_type(object) else {
-        bail!("invalid object type")
-    };
-
-    Ok((object, r#type))
-}
-
-/// Object size parsed using nom
-fn parse_size(object: &[u8]) -> Result<(&[u8], usize)> {
-    let Ok((object, size)) = digit1::<_, ()>(object) else {
-        bail!("invalid size in object file")
-    };
-
-    let size = std::str::from_utf8(size)
-        .context("invalid size in object file")?
-        .parse::<usize>()
-        .context("failed to parse size")?;
-
-    Ok((object, size))
-}
-
-/// Object contents parsed using nom
-fn parse_contents(object: &[u8]) -> Result<&[u8]> {
-    let (object, _) = parse_type(object)?;
-
-    let Ok((object, _)) = char::<_, ()>(' ')(object) else {
-        bail!("unexpected character in object file")
-    };
-
-    let (object, size) = parse_size(object)?;
-
-    let Ok((object, _)) = char::<_, ()>('\0')(object) else {
-        bail!("unexpected character in object file")
-    };
-
-    ensure!(object.len() == size, "object size is incorrect");
-
-    Ok(object)
 }

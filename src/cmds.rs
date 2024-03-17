@@ -8,6 +8,7 @@ const SHA_LEN: usize = 40;
 pub mod cat_file;
 pub mod hash_object;
 pub mod init;
+pub mod ls_tree;
 
 #[cfg(test)]
 mod tests {
@@ -84,7 +85,24 @@ mod tests {
             Some(&mut output),
         )
         .unwrap();
-
         assert_eq!(output, b"Hello, world");
+
+        output.clear();
+        cat_file::cat_file(
+            cat_file::Info::Type,
+            "dbe9dba55ea8fd4d5be3868b015e044be0848ec5",
+            Some(&mut output),
+        )
+        .unwrap();
+        assert_eq!(output, b"blob");
+
+        output.clear();
+        cat_file::cat_file(
+            cat_file::Info::Size,
+            "dbe9dba55ea8fd4d5be3868b015e044be0848ec5",
+            Some(&mut output),
+        )
+        .unwrap();
+        assert_eq!(output, b"12");
     }
 }
