@@ -1,19 +1,18 @@
 use anyhow::{Context, Result};
-use clap::Args;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-use crate::commands::{DOT_GIT, HEAD, OBJECTS, REFS};
+use crate::cmds::{DOT_GIT, HEAD, OBJECTS, REFS};
 
-#[derive(Args)]
-pub struct InitArgs {
+#[derive(clap::Args)]
+pub struct Args {
     /// Path to use for initializing the repository
     pub path: Option<PathBuf>,
 }
 
-/// Initializes a new git repository by creating the .git directory and its subdirectories
+/// Initializes a new git repository by creating the .git directory and its subdirectories.
 pub fn init(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref().join(DOT_GIT);
 
