@@ -1,7 +1,8 @@
 use std::{
     cell::Cell,
-    fmt, fs,
-    io::Read,
+    fmt,
+    fs::{self, File},
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 
@@ -89,11 +90,44 @@ pub fn find_object(hash: &str) -> anyhow::Result<PathBuf> {
     Ok(entry.path())
 }
 
+pub fn create_object(hash: &[u8; SHA_LEN]) -> anyhow::Result<File> {
+    let mut path: PathBuf = [DOT_GIT, OBJECTS, &format!("{:02x}", &hash[0])]
+        .iter()
+        .collect();
+
+    if let Err(error) = fs::create_dir(&path) {
+        ensure!(
+            error.kind() == io::ErrorKind::AlreadyExists,
+            "failed to create object subdirectory"
+        );
+    }
+
+    path.push({
+        use std::fmt::Write; //here to prevent conflict with io::Write
+
+        let mut filename = String::with_capacity(SHA_DISPLAY_LEN - 2);
+        for byte in &hash[1..] {
+            write!(&mut filename, "{byte:02x}")?;
+        }
+        filename
+    });
+
+    // remove an existing file to clear permissions
+    if let Err(error) = fs::remove_file(&path) {
+        ensure!(
+            error.kind() == io::ErrorKind::NotFound,
+            "failed to remove object"
+        );
+    }
+
+    Ok(File::create(path)?)
+}
+
 pub fn tree_level(hash: &str, recurse: bool) -> anyhow::Result<Vec<Entry>> {
     let path = find_object(hash)?;
 
     let mut buf = vec![];
-    ZlibDecoder::new(fs::File::open(path)?).read_to_end(&mut buf)?;
+    ZlibDecoder::new(File::open(path)?).read_to_end(&mut buf)?;
 
     let (_, entries) = parsing::parse_tree(recurse)(buf.as_slice())?;
 

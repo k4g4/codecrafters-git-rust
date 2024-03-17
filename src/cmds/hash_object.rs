@@ -4,11 +4,10 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::ensure;
 use flate2::read::ZlibEncoder;
 use sha1::{Digest, Sha1};
 
-use crate::{utils, DOT_GIT, OBJECTS, SHA_DISPLAY_LEN};
+use crate::utils;
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -47,8 +46,13 @@ impl From<SourceArgs> for Source {
 }
 
 /// Prints the sha1 hash of a file, and writes it to the .git
-/// database if `write == true`.
-pub fn hash_object(source: Source, write: bool, mut output: impl Write) -> anyhow::Result<()> {
+/// database as a blob if `write == true`.
+pub fn hash_object(
+    source: Source,
+    write: bool,
+    as_hex: bool,
+    mut output: impl Write,
+) -> anyhow::Result<()> {
     let contents = match source {
         Source::Path(path) => fs::read(path)?,
         Source::Stdin => {
@@ -69,35 +73,18 @@ pub fn hash_object(source: Source, write: bool, mut output: impl Write) -> anyho
         &mut hasher,
     )?;
 
-    let digest = hasher.finalize();
-    for byte in &digest {
-        write!(output, "{byte:02x}")?;
+    let hash = hasher.finalize();
+    if as_hex {
+        for byte in &hash {
+            write!(output, "{byte:02x}")?;
+        }
+        writeln!(output)?;
+    } else {
+        output.write_all(&hash)?;
     }
-    writeln!(output)?;
 
     if write {
-        let mut path: PathBuf = [DOT_GIT, OBJECTS, &format!("{:02x}", &digest[0])]
-            .iter()
-            .collect();
-
-        if let Err(error) = fs::create_dir(&path) {
-            ensure!(
-                error.kind() == io::ErrorKind::AlreadyExists,
-                "failed to create object subdirectory"
-            );
-        }
-
-        path.push({
-            use std::fmt::Write; //here to prevent conflict with io::Write
-
-            let mut filename = String::with_capacity(SHA_DISPLAY_LEN - 2);
-            for byte in &digest[1..] {
-                write!(&mut filename, "{byte:02x}")?;
-            }
-            filename
-        });
-
-        let mut file = fs::File::create(path)?;
+        let mut file = utils::create_object(&hash.into())?;
 
         let mut compressor = ZlibEncoder::new(
             header.as_bytes().chain(contents.as_slice()),

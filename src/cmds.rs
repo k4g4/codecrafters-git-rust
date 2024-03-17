@@ -67,6 +67,7 @@ mod tests {
         hash_object::hash_object(
             hash_object::Source::Path(PathBuf::from(file)),
             true,
+            true,
             &mut output,
         )
         .unwrap();

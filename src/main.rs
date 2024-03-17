@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Cmd::HashObject(cmds::hash_object::Args { write, source }) => {
-            cmds::hash_object::hash_object(source.into(), write, stdout)
+            cmds::hash_object::hash_object(source.into(), write, true, stdout)
         }
 
         Cmd::LsTree(cmds::ls_tree::Args {

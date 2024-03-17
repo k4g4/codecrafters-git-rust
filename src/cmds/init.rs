@@ -23,7 +23,7 @@ pub fn init(path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()
         .and_then(|_| fs::write(path.join(HEAD), "ref: refs/heads/main\n"))
         .with_context(|| format!("failed to initialize {}", path.display()))?;
 
-    writeln!(output, "Initialized git directory");
+    writeln!(output, "Initialized git directory")?;
 
     Ok(())
 }
