@@ -90,8 +90,14 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyho
             // then perform just one allocation for the next read
             let mut buf = vec![];
             decoder.read_to_end(&mut buf)?;
-            let (_, contents) = parsing::parse_contents(buf.as_slice())?;
-            writer.write(contents)?;
+            let (contents, r#type) = parsing::parse_contents(buf.as_slice())?;
+
+            // dispatch to ls_tree for tree objects
+            if matches!(r#type, parsing::Type::Tree) {
+                super::ls_tree::ls_tree(false, false, false, 20, hash, Some(writer))?;
+            } else {
+                writer.write(contents)?;
+            }
         }
     }
 

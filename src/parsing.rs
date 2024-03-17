@@ -102,14 +102,14 @@ pub fn parse_header(object: &[u8]) -> nom::IResult<&[u8], Header, Error> {
 }
 
 /// Object contents
-pub fn parse_contents(object: &[u8]) -> nom::IResult<(), &[u8], Error> {
-    let (object, Header { size, .. }) = parse_header(object)?;
+pub fn parse_contents(object: &[u8]) -> nom::IResult<&[u8], Type, Error> {
+    let (object, Header { r#type, size }) = parse_header(object)?;
 
     if object.len() != size {
         return Err(Error::new("object size is incorrect"));
     }
 
-    Ok(((), object))
+    Ok((object, r#type))
 }
 
 /// Tree entries
