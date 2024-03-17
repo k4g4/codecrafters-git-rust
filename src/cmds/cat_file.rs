@@ -1,16 +1,11 @@
-use anyhow::{anyhow, ensure, Context};
 use flate2::read::ZlibDecoder;
 
 use std::{
     fs,
     io::{self, Read, Write},
-    path::Path,
 };
 
-use crate::{
-    cmds::{DOT_GIT, OBJECTS, SHA_LEN},
-    parsing,
-};
+use crate::{parsing, utils};
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -62,33 +57,9 @@ impl From<InfoArgs> for Info {
 
 /// Prints an object's type, size, or contents if it exists in the .git database.
 pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyhow::Result<()> {
-    let failed_context = || format!("failed to find {hash}");
+    let path = utils::find_object(hash)?;
 
-    ensure!(hash.len() > 3, "object hash is not long enough");
-    let (sha_dir, sha_file) = hash.split_at(2);
-
-    let entries = fs::read_dir(Path::new(DOT_GIT).join(OBJECTS))?;
-
-    let entry = entries
-        .filter_map(Result::ok)
-        .find(|entry| sha_dir == entry.file_name())
-        .with_context(failed_context)?;
-
-    let entries = fs::read_dir(entry.path())?;
-
-    let entry = entries
-        .filter_map(Result::ok)
-        .find(|entry| {
-            entry.file_name().len() == SHA_LEN - 2
-                && entry
-                    .file_name()
-                    .as_os_str()
-                    .to_string_lossy()
-                    .starts_with(sha_file)
-        })
-        .with_context(failed_context)?;
-
-    let mut decoder = ZlibDecoder::new(fs::File::open(entry.path())?);
+    let mut decoder = ZlibDecoder::new(fs::File::open(path)?);
 
     let mut stdout = None;
     let writer = output.unwrap_or_else(|| stdout.insert(io::stdout().lock()));
@@ -110,11 +81,8 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyho
             if count < 16 {
                 decoder.read(&mut buf[count..])?;
             }
-            let (buf, _) = parsing::parse_type(&buf)?;
-            let (buf, _) = nom::character::complete::char::<_, ()>(' ')(buf)
-                .map_err(|_| anyhow!("unexpected character in object file"))?;
-            let (_, header) = parsing::parse_header(&buf)?;
-            write!(writer, "{}", header.size)?;
+            let (_, parsing::Header { size, .. }) = parsing::parse_header(&buf)?;
+            write!(writer, "{size}")?;
         }
 
         Info::Print => {
@@ -122,7 +90,7 @@ pub fn cat_file(info: Info, hash: &str, output: Option<&mut dyn Write>) -> anyho
             // then perform just one allocation for the next read
             let mut buf = vec![];
             decoder.read_to_end(&mut buf)?;
-            let (contents, _) = parsing::parse_contents(buf.as_slice())?;
+            let (_, contents) = parsing::parse_contents(buf.as_slice())?;
             writer.write(contents)?;
         }
     }

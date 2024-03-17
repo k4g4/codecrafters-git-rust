@@ -1,10 +1,3 @@
-const DOT_GIT: &str = ".git";
-const OBJECTS: &str = "objects";
-const REFS: &str = "refs";
-const HEAD: &str = "HEAD";
-
-const SHA_LEN: usize = 40;
-
 pub mod cat_file;
 pub mod hash_object;
 pub mod init;

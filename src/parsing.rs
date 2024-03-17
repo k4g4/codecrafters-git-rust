@@ -2,10 +2,16 @@ use std::fmt;
 
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{char, digit1},
+    bytes::complete::{tag, take_until, take_while_m_n},
+    character::{
+        complete::{char, digit1},
+        is_digit,
+    },
+    multi::many0,
     sequence::separated_pair,
 };
+
+use crate::{utils, SHA_DISPLAY_LEN, SHA_LEN};
 
 pub enum Type {
     Blob,
@@ -42,8 +48,13 @@ pub struct Header {
     pub size: usize,
 }
 
-#[derive(Debug)]
 pub struct Error(anyhow::Error);
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl Error {
     fn new(msg: &str) -> nom::Err<Self> {
@@ -91,12 +102,96 @@ pub fn parse_header(object: &[u8]) -> nom::IResult<&[u8], Header, Error> {
 }
 
 /// Object contents
-pub fn parse_contents(object: &[u8]) -> nom::IResult<&[u8], (), Error> {
+pub fn parse_contents(object: &[u8]) -> nom::IResult<(), &[u8], Error> {
     let (object, Header { size, .. }) = parse_header(object)?;
 
     if object.len() != size {
         return Err(Error::new("object size is incorrect"));
     }
 
-    Ok((object, ()))
+    Ok(((), object))
+}
+
+/// Tree entries
+pub fn parse_tree(
+    recurse: bool,
+) -> impl Fn(&[u8]) -> nom::IResult<&[u8], Vec<utils::Entry>, Error> {
+    move |object| {
+        let (object, Header { r#type, size }) = parse_header(object)?;
+
+        if !matches!(r#type, Type::Tree) {
+            return Err(Error::new("object is not a tree"));
+        }
+        if object.len() != size {
+            return Err(Error::new("object size is incorrect"));
+        }
+
+        many0(entry(recurse))(object)
+    }
+}
+
+fn entry(recurse: bool) -> impl Fn(&[u8]) -> nom::IResult<&[u8], utils::Entry, Error> {
+    move |object| {
+        let (object, mode) = mode(object)?;
+        let (object, _) = char(' ')(object)?;
+        let (object, name) = name(object)?;
+        let (object, _) = char('\0')(object)?;
+        let (object, hash) = hash(object)?;
+        let tree = mode == 40_000;
+        let children = if tree && recurse {
+            let hash = {
+                use std::fmt::Write;
+
+                let mut new_hash = String::with_capacity(SHA_DISPLAY_LEN);
+                for byte in hash {
+                    write!(&mut new_hash, "{byte:02x}").expect("writing to a string");
+                }
+                new_hash
+            };
+
+            Some(utils::tree_level(&hash, true).map_err(|error| nom::Err::Error(Error(error)))?)
+        } else {
+            None
+        };
+
+        Ok((
+            object,
+            utils::Entry {
+                mode,
+                hash,
+                name,
+                tree,
+                children,
+                display: Default::default(),
+            },
+        ))
+    }
+}
+
+fn mode(object: &[u8]) -> nom::IResult<&[u8], u32, Error> {
+    let (object, mode) = take_while_m_n(5, 6, is_digit)(object)?;
+
+    Ok((
+        object,
+        std::str::from_utf8(mode)
+            .expect("all digits")
+            .parse()
+            .expect("all digits"),
+    ))
+}
+
+fn name(object: &[u8]) -> nom::IResult<&[u8], String, Error> {
+    let (object, name) = take_until("\0")(object)?;
+
+    Ok((object, String::from_utf8_lossy(name).into_owned()))
+}
+
+fn hash(object: &[u8]) -> nom::IResult<&[u8], [u8; SHA_LEN], Error> {
+    let hash = object
+        .get(..SHA_LEN)
+        .ok_or_else(|| Error::new("failed to read hash"))?
+        .try_into()
+        .expect("got 20 bytes");
+
+    Ok((&object[SHA_LEN..], hash))
 }

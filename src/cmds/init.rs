@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::cmds::{DOT_GIT, HEAD, OBJECTS, REFS};
+use crate::{DOT_GIT, HEAD, OBJECTS, REFS};
 
 #[derive(clap::Args)]
 pub struct Args {

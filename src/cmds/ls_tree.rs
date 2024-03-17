@@ -1,3 +1,12 @@
+use std::io::{self, Write};
+
+use anyhow::ensure;
+
+use crate::{
+    utils::{self, EntryDisplay},
+    SHA_LEN,
+};
+
 #[derive(clap::Args)]
 pub struct Args {
     /// Recurse into subtrees
@@ -13,12 +22,34 @@ pub struct Args {
     pub name_only: bool,
 
     /// Abbreviate hashes
-    #[arg(long)]
+    #[arg(long, default_value_t = SHA_LEN as u8)]
     pub abbrev: u8,
+
+    /// The object's hash
+    pub hash: String,
 }
 
-pub fn ls_tree(recurse: bool, trees_only: bool, name_only: bool, abbrev: u8) -> anyhow::Result<()> {
-    //
+pub fn ls_tree(
+    recurse: bool,
+    trees_only: bool,
+    name_only: bool,
+    abbrev: u8,
+    hash: &str,
+    output: Option<&mut dyn Write>,
+) -> anyhow::Result<()> {
+    ensure!(abbrev <= SHA_LEN as u8, "abbrev value must be <= {SHA_LEN}");
+
+    let mut stdout = None;
+    let writer = output.unwrap_or_else(|| stdout.insert(io::stdout().lock()));
+
+    for entry in utils::tree_level(hash, recurse)? {
+        entry.display.set(Some(EntryDisplay {
+            trees_only,
+            name_only,
+            abbrev,
+        }));
+        write!(writer, "{entry}")?;
+    }
 
     Ok(())
 }

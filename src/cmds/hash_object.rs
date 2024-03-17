@@ -8,7 +8,7 @@ use anyhow::ensure;
 use flate2::read::ZlibEncoder;
 use sha1::{Digest, Sha1};
 
-use crate::cmds::{DOT_GIT, OBJECTS, SHA_LEN};
+use crate::{DOT_GIT, OBJECTS, SHA_DISPLAY_LEN};
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -90,7 +90,7 @@ pub fn hash_object(source: Source, write: bool) -> anyhow::Result<()> {
         path.push({
             use std::fmt::Write; //here to prevent conflict with io::Write
 
-            let mut filename = String::with_capacity(SHA_LEN - 2);
+            let mut filename = String::with_capacity(SHA_DISPLAY_LEN - 2);
             for byte in &digest[1..] {
                 write!(&mut filename, "{byte:02x}")?;
             }
