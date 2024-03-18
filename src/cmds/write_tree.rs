@@ -92,7 +92,7 @@ fn write_tree_at(path: impl AsRef<Path>) -> anyhow::Result<[u8; SHA_LEN]> {
         write!(&mut contents, "{} ", entry.mode)?;
         contents.write_all(entry.name.as_encoded_bytes())?;
         contents.write_all(b"\0")?;
-        contents.write_all(entry.hash.as_slice())?;
+        contents.write_all(&entry.hash)?;
     }
 
     let header = format!("tree {}\0", contents.len());

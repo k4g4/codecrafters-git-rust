@@ -2,6 +2,9 @@ use std::io;
 
 use clap::{Parser, Subcommand};
 
+#[cfg(test)]
+use std::sync::Mutex;
+
 mod cmds;
 mod parsing;
 mod utils;
@@ -10,9 +13,13 @@ const DOT_GIT: &str = ".git";
 const OBJECTS: &str = "objects";
 const REFS: &str = "refs";
 const HEAD: &str = "HEAD";
+const CONFIG: &str = "config";
 
 const SHA_LEN: usize = 20;
 const SHA_DISPLAY_LEN: usize = 40;
+
+#[cfg(test)]
+static FORCE_SINGLE_THREAD: Mutex<()> = Mutex::new(()); // used to synchronize unit tests
 
 /// A simple clone of git
 #[derive(Parser)]
@@ -37,6 +44,12 @@ enum Cmd {
 
     /// Write a tree object to the .git database
     WriteTree(cmds::write_tree::Args),
+
+    /// Create a commit object
+    CommitTree(cmds::commit_tree::Args),
+
+    /// Get and set configurations
+    Config(cmds::config::Args),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -65,5 +78,11 @@ fn main() -> anyhow::Result<()> {
         }) => cmds::ls_tree::ls_tree(recurse, trees_only, name_only, abbrev, &hash, stdout),
 
         Cmd::WriteTree(cmds::write_tree::Args {}) => cmds::write_tree::write_tree(stdout),
+
+        Cmd::CommitTree(cmds::commit_tree::Args { parents, message }) => {
+            cmds::commit_tree::commit_tree(&parents, &message, stdout)
+        }
+
+        Cmd::Config(args) => cmds::config::config(args.into(), stdout),
     }
 }

@@ -1,4 +1,6 @@
 pub mod cat_file;
+pub mod commit_tree;
+pub mod config;
 pub mod hash_object;
 pub mod init;
 pub mod ls_tree;
@@ -6,15 +8,12 @@ pub mod write_tree;
 
 #[cfg(test)]
 mod tests {
+    use crate::FORCE_SINGLE_THREAD;
+
     use super::*;
-    use std::{
-        env, fs, io,
-        path::PathBuf,
-        sync::{Mutex, MutexGuard},
-    };
+    use std::{env, fs, io, path::PathBuf, sync::MutexGuard};
 
     const TEST_DIR: &'static str = "test_dir";
-    static FORCE_SINGLE_THREAD: Mutex<()> = Mutex::new(());
 
     struct Setup(MutexGuard<'static, ()>);
     impl Setup {
@@ -44,7 +43,7 @@ mod tests {
             .map(|entry| entry.unwrap().file_name().into_string().unwrap())
             .collect::<Vec<_>>();
         filenames.sort();
-        assert_eq!(filenames, ["HEAD", "objects", "refs"]);
+        assert_eq!(filenames, ["HEAD", "config", "objects", "refs"]);
 
         assert_eq!(
             fs::read(PathBuf::from(".git").join("HEAD")).unwrap(),

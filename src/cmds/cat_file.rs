@@ -87,7 +87,7 @@ pub fn cat_file(info: Info, hash: &str, mut output: impl Write) -> anyhow::Resul
             // then perform just one allocation for the next read
             let mut buf = vec![];
             decoder.read_to_end(&mut buf)?;
-            let (contents, r#type) = parsing::parse_contents(buf.as_slice())?;
+            let (contents, r#type) = parsing::parse_contents(&buf)?;
 
             // dispatch to ls_tree for tree objects
             if matches!(r#type, parsing::Type::Tree) {
