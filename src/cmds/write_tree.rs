@@ -76,7 +76,7 @@ fn write_tree_at(path: impl AsRef<Path>) -> anyhow::Result<[u8; SHA_LEN]> {
             let (left, right) = (left.name.as_encoded_bytes(), right.name.as_encoded_bytes());
             let small_len = left.len().min(right.len());
 
-            if &left[..small_len] == &right[..small_len] {
+            if left[..small_len] == right[..small_len] {
                 // git prefers this edge case to be reversed for some reason
                 left.len().cmp(&right.len()).reverse()
             } else {

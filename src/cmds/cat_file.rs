@@ -64,9 +64,9 @@ pub fn cat_file(info: Info, hash: &str, mut output: impl Write) -> anyhow::Resul
     match info {
         Info::Type => {
             let mut buf = [0u8; 64];
-            let count = decoder.read(&mut buf)?;
-            if count < 16 {
-                decoder.read(&mut buf[count..])?;
+            let mut count = decoder.read(&mut buf)?;
+            while count > 0 {
+                count = decoder.read(&mut buf[count..])?;
             }
             let (_, r#type) = parsing::parse_type(&buf)?;
             write!(output, "{type}")?;
@@ -74,9 +74,9 @@ pub fn cat_file(info: Info, hash: &str, mut output: impl Write) -> anyhow::Resul
 
         Info::Size => {
             let mut buf = [0u8; 64];
-            let count = decoder.read(&mut buf)?;
-            if count < 16 {
-                decoder.read(&mut buf[count..])?;
+            let mut count = decoder.read(&mut buf)?;
+            while count > 0 {
+                count = decoder.read(&mut buf[count..])?;
             }
             let (_, parsing::Header { size, .. }) = parsing::parse_header(&buf)?;
             write!(output, "{size}")?;
@@ -93,7 +93,7 @@ pub fn cat_file(info: Info, hash: &str, mut output: impl Write) -> anyhow::Resul
             if matches!(r#type, parsing::Type::Tree) {
                 super::ls_tree::ls_tree(false, false, false, 20, hash, output)?;
             } else {
-                output.write(contents)?;
+                output.write_all(contents)?;
             }
         }
     }
