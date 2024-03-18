@@ -58,13 +58,13 @@ fn write_tree_at(path: impl AsRef<Path>) -> anyhow::Result<[u8; SHA_LEN]> {
                         hash.as_mut(),
                     )?;
                     let metadata = entry.metadata()?;
-                    let mode = metadata.permissions().mode();
+                    let permissions = metadata.permissions().mode();
                     let mode = if metadata.is_symlink() {
-                        120_000
-                    } else if mode & 0o100 > 0 || mode & 0o010 > 0 || mode & 0o001 > 0 {
-                        100_755
+                        120_000 // symlink
+                    } else if permissions & 0o111 > 0 {
+                        100_755 // executable
                     } else {
-                        100_644
+                        100_644 // normal file
                     };
 
                     Entry { mode, name, hash }
