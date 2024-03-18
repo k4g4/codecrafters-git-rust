@@ -190,7 +190,9 @@ pub fn list_config() -> anyhow::Result<String> {
 }
 
 fn read_config() -> anyhow::Result<Vec<(String, Vec<(String, String)>)>> {
-    let config = fs::read_to_string(Path::new(DOT_GIT).join(CONFIG))?;
+    let Ok(config) = fs::read_to_string(Path::new(DOT_GIT).join(CONFIG)) else {
+        return Ok(vec![]);
+    };
 
     let mut sections = vec![];
     let mut section = vec![];

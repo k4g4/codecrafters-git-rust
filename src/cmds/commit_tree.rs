@@ -28,10 +28,8 @@ pub fn commit_tree(
     tree_hash: Option<&str>,
     mut output: impl Write,
 ) -> anyhow::Result<()> {
-    let name =
-        get_config_value("user", "name")?.context("set config 'user.name' to write commits")?;
-    let email =
-        get_config_value("user", "email")?.context("set config 'user.email' to write commits")?;
+    let name = get_config_value("user", "name")?.unwrap_or_else(|| "Anonymous".into());
+    let email = get_config_value("user", "email")?.unwrap_or_else(|| "N/A".into());
 
     // hacky way to get the full hash if the hash is abbreviated
     let get_full_hash = |hash| -> anyhow::Result<_> {
