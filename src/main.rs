@@ -79,9 +79,11 @@ fn main() -> anyhow::Result<()> {
 
         Cmd::WriteTree(cmds::write_tree::Args {}) => cmds::write_tree::write_tree(stdout),
 
-        Cmd::CommitTree(cmds::commit_tree::Args { parents, message }) => {
-            cmds::commit_tree::commit_tree(&parents, &message, stdout)
-        }
+        Cmd::CommitTree(cmds::commit_tree::Args {
+            parents,
+            message,
+            tree_hash,
+        }) => cmds::commit_tree::commit_tree(&parents, &message, tree_hash.as_deref(), stdout),
 
         Cmd::Config(args) => cmds::config::config(args.into(), stdout),
     }
