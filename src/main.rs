@@ -12,6 +12,8 @@ mod utils;
 const DOT_GIT: &str = ".git";
 const OBJECTS: &str = "objects";
 const REFS: &str = "refs";
+const HEADS: &str = "heads";
+const TAGS: &str = "tags";
 const HEAD: &str = "HEAD";
 const CONFIG: &str = "config";
 
@@ -33,6 +35,12 @@ enum Cmd {
     /// Initialize an empty repository
     Init(cmds::init::Args),
 
+    /// Create a commit in the repository
+    Commit(cmds::commit::Args),
+
+    /// Get and set configurations
+    Config(cmds::config::Args),
+
     /// Print information about an object
     CatFile(cmds::cat_file::Args),
 
@@ -47,9 +55,6 @@ enum Cmd {
 
     /// Create a commit object
     CommitTree(cmds::commit_tree::Args),
-
-    /// Get and set configurations
-    Config(cmds::config::Args),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -86,5 +91,7 @@ fn main() -> anyhow::Result<()> {
         }) => cmds::commit_tree::commit_tree(&parents, &message, tree_hash.as_deref(), stdout),
 
         Cmd::Config(args) => cmds::config::config(args.into(), stdout),
+
+        Cmd::Commit(cmds::commit::Args { message }) => cmds::commit::commit(message, stdout),
     }
 }

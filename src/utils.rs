@@ -10,7 +10,7 @@ use std::{
 use anyhow::{ensure, Context};
 use flate2::read::ZlibDecoder;
 
-use crate::{parsing, CONFIG, DOT_GIT, OBJECTS, SHA_DISPLAY_LEN, SHA_LEN};
+use crate::{parsing, CONFIG, DOT_GIT, HEAD, OBJECTS, SHA_DISPLAY_LEN, SHA_LEN};
 
 #[derive(Clone, Copy)]
 pub struct EntryDisplay {
@@ -133,6 +133,28 @@ pub fn tree_level(hash: &str, recurse: bool) -> anyhow::Result<Vec<Entry>> {
     let (_, entries) = parsing::parse_tree(recurse)(&buf)?;
 
     Ok(entries)
+}
+
+pub fn get_head() -> anyhow::Result<Option<String>> {
+    let head_file = fs::read_to_string(Path::new(DOT_GIT).join(HEAD))?;
+    let head_ref_at = Path::new(DOT_GIT).join(
+        head_file
+            .trim()
+            .strip_prefix("ref: ")
+            .context("detached HEAD")?,
+    );
+    Ok(fs::read_to_string(head_ref_at).ok())
+}
+
+pub fn update_head(commit_hash: &str) -> anyhow::Result<()> {
+    let head_file = fs::read_to_string(Path::new(DOT_GIT).join(HEAD))?;
+    let head_ref_at = Path::new(DOT_GIT).join(
+        head_file
+            .trim()
+            .strip_prefix("ref: ")
+            .context("detached HEAD")?,
+    );
+    Ok(fs::write(head_ref_at, commit_hash)?)
 }
 
 pub fn get_config_value(section: &str, key: &str) -> anyhow::Result<Option<String>> {

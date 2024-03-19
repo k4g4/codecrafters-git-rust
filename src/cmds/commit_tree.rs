@@ -13,12 +13,15 @@ use super::write_tree::write_tree;
 
 #[derive(clap::Args)]
 pub struct Args {
+    /// Commit's parent(s)
     #[arg(short)]
     pub parents: Vec<String>,
 
+    /// Message for the commit
     #[arg(short)]
     pub message: String,
 
+    /// Hash of the tree for this commit
     pub tree_hash: Option<String>,
 }
 
