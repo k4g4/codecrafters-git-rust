@@ -108,7 +108,7 @@ pub fn create_object(hash: &[u8; SHA_LEN]) -> anyhow::Result<File> {
 
         let mut filename = String::with_capacity(SHA_DISPLAY_LEN - 2);
         for byte in &hash[1..] {
-            write!(&mut filename, "{byte:02x}")?;
+            write!(filename, "{byte:02x}")?;
         }
         filename
     });

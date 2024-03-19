@@ -4,11 +4,12 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while_m_n},
     character::{
-        complete::{char, digit1},
-        is_digit,
+        complete::{char, digit1, newline, one_of},
+        is_digit, is_hex_digit,
     },
     multi::many0,
     sequence::separated_pair,
+    IResult,
 };
 
 use crate::{utils, SHA_DISPLAY_LEN, SHA_LEN};
@@ -48,6 +49,15 @@ pub struct Header {
     pub size: usize,
 }
 
+pub struct Commit {
+    pub hash: Option<String>,
+    pub parents: Vec<[u8; SHA_DISPLAY_LEN]>,
+    pub author: String,
+    pub timestamp: u32,
+    pub timezone: [u8; 5],
+    pub message: String,
+}
+
 pub struct Error(anyhow::Error);
 
 impl fmt::Debug for Error {
@@ -73,8 +83,8 @@ impl<I> nom::error::ParseError<I> for Error {
 }
 
 /// Object type
-pub fn parse_type(object: &[u8]) -> nom::IResult<&[u8], Type, Error> {
-    let mut object_type = alt((tag(b"blob"), tag(b"tree"), tag(b"commit"), tag(b"tag")));
+pub fn parse_type(object: &[u8]) -> IResult<&[u8], Type, Error> {
+    let mut object_type = alt((tag("blob"), tag("tree"), tag("commit"), tag("tag")));
 
     let (object, r#type) = object_type(object)?;
 
@@ -82,7 +92,7 @@ pub fn parse_type(object: &[u8]) -> nom::IResult<&[u8], Type, Error> {
 }
 
 /// Object size
-fn parse_size(object: &[u8]) -> nom::IResult<&[u8], usize, Error> {
+fn parse_size(object: &[u8]) -> IResult<&[u8], usize, Error> {
     let (object, size) = digit1(object)?;
 
     let size = std::str::from_utf8(size)
@@ -94,7 +104,7 @@ fn parse_size(object: &[u8]) -> nom::IResult<&[u8], usize, Error> {
 }
 
 /// Object header
-pub fn parse_header(object: &[u8]) -> nom::IResult<&[u8], Header, Error> {
+pub fn parse_header(object: &[u8]) -> IResult<&[u8], Header, Error> {
     let (object, (r#type, size)) = separated_pair(parse_type, char(' '), parse_size)(object)?;
     let (object, _) = char('\0')(object)?;
 
@@ -102,7 +112,7 @@ pub fn parse_header(object: &[u8]) -> nom::IResult<&[u8], Header, Error> {
 }
 
 /// Object contents
-pub fn parse_contents(object: &[u8]) -> nom::IResult<&[u8], Type, Error> {
+pub fn parse_contents(object: &[u8]) -> IResult<&[u8], Type, Error> {
     let (object, Header { r#type, size }) = parse_header(object)?;
 
     if object.len() != size {
@@ -113,9 +123,7 @@ pub fn parse_contents(object: &[u8]) -> nom::IResult<&[u8], Type, Error> {
 }
 
 /// Tree entries
-pub fn parse_tree(
-    recurse: bool,
-) -> impl Fn(&[u8]) -> nom::IResult<&[u8], Vec<utils::Entry>, Error> {
+pub fn parse_tree(recurse: bool) -> impl Fn(&[u8]) -> IResult<&[u8], Vec<utils::Entry>, Error> {
     move |object| {
         let (object, Header { r#type, size }) = parse_header(object)?;
 
@@ -130,7 +138,7 @@ pub fn parse_tree(
     }
 }
 
-fn entry(recurse: bool) -> impl Fn(&[u8]) -> nom::IResult<&[u8], utils::Entry, Error> {
+fn entry(recurse: bool) -> impl Fn(&[u8]) -> IResult<&[u8], utils::Entry, Error> {
     move |object| {
         let (object, mode) = mode(object)?;
         let (object, _) = char(' ')(object)?;
@@ -144,7 +152,7 @@ fn entry(recurse: bool) -> impl Fn(&[u8]) -> nom::IResult<&[u8], utils::Entry, E
 
                 let mut new_hash = String::with_capacity(SHA_DISPLAY_LEN);
                 for byte in hash {
-                    write!(&mut new_hash, "{byte:02x}").expect("writing to a string");
+                    write!(new_hash, "{byte:02x}").expect("writing to a string");
                 }
                 new_hash
             };
@@ -168,7 +176,7 @@ fn entry(recurse: bool) -> impl Fn(&[u8]) -> nom::IResult<&[u8], utils::Entry, E
     }
 }
 
-fn mode(object: &[u8]) -> nom::IResult<&[u8], u32, Error> {
+fn mode(object: &[u8]) -> IResult<&[u8], u32, Error> {
     let (object, mode) = take_while_m_n(5, 6, is_digit)(object)?;
 
     Ok((
@@ -180,13 +188,13 @@ fn mode(object: &[u8]) -> nom::IResult<&[u8], u32, Error> {
     ))
 }
 
-fn name(object: &[u8]) -> nom::IResult<&[u8], String, Error> {
+fn name(object: &[u8]) -> IResult<&[u8], String, Error> {
     let (object, name) = take_until("\0")(object)?;
 
     Ok((object, String::from_utf8_lossy(name).into_owned()))
 }
 
-fn hash(object: &[u8]) -> nom::IResult<&[u8], [u8; SHA_LEN], Error> {
+fn hash(object: &[u8]) -> IResult<&[u8], [u8; SHA_LEN], Error> {
     let hash = object
         .get(..SHA_LEN)
         .ok_or_else(|| Error::new("failed to read hash"))?
@@ -194,4 +202,108 @@ fn hash(object: &[u8]) -> nom::IResult<&[u8], [u8; SHA_LEN], Error> {
         .expect("got 20 bytes");
 
     Ok((&object[SHA_LEN..], hash))
+}
+
+pub fn parse_commit(contents: &[u8]) -> IResult<&[u8], Commit, Error> {
+    let (contents, _) = tree(contents)?;
+    let (contents, parents) = many0(parent)(contents)?;
+    let (contents, author) = author(contents)?;
+    let (contents, timestamp) = timestamp(contents)?;
+    let (contents, timezone) = timezone(contents)?;
+    let (contents, _) = committer(contents)?;
+    let (contents, message) = message(contents)?;
+
+    Ok((
+        contents,
+        Commit {
+            hash: None,
+            parents,
+            author,
+            timestamp,
+            timezone,
+            message,
+        },
+    ))
+}
+
+fn hex_hash(contents: &[u8]) -> IResult<&[u8], [u8; SHA_DISPLAY_LEN], Error> {
+    let (contents, hash) =
+        take_while_m_n(SHA_DISPLAY_LEN, SHA_DISPLAY_LEN, is_hex_digit)(contents)?;
+
+    Ok((
+        contents,
+        hash.try_into()
+            .expect("must have taken SHA_DISPLAY_LEN bytes"),
+    ))
+}
+
+fn tree(contents: &[u8]) -> IResult<&[u8], (), Error> {
+    let (contents, _) = tag("tree ")(contents)?;
+    let (contents, _) = hex_hash(contents)?;
+    let (contents, _) = newline(contents)?;
+
+    Ok((contents, ()))
+}
+
+fn parent(contents: &[u8]) -> IResult<&[u8], [u8; SHA_DISPLAY_LEN], Error> {
+    let (contents, _) = tag("parent ")(contents)?;
+    let (contents, hash) = hex_hash(contents)?;
+    let (contents, _) = newline(contents)?;
+
+    Ok((contents, hash))
+}
+
+fn author(contents: &[u8]) -> IResult<&[u8], String, Error> {
+    let (contents, _) = tag(b"author ")(contents)?;
+    let (contents, name) = take_until(" <")(contents)?;
+    let (contents, _) = tag(b" <")(contents)?;
+    let (contents, email) = take_until("> ")(contents)?;
+    let (contents, _) = tag(b"> ")(contents)?;
+
+    Ok((
+        contents,
+        format!(
+            "{} <{}>",
+            std::str::from_utf8(name).map_err(|_| Error::new("failed to parse name"))?,
+            std::str::from_utf8(email).map_err(|_| Error::new("failed to parse email"))?,
+        ),
+    ))
+}
+
+fn committer(contents: &[u8]) -> IResult<&[u8], (), Error> {
+    let (contents, _) = take_until("\n")(contents)?;
+    let (contents, _) = newline(contents)?;
+
+    Ok((contents, ()))
+}
+
+fn timestamp(contents: &[u8]) -> IResult<&[u8], u32, Error> {
+    let (contents, digits) = digit1(contents)?;
+    let (contents, _) = char(' ')(contents)?;
+
+    Ok((
+        contents,
+        std::str::from_utf8(digits)
+            .ok()
+            .and_then(|digits| digits.parse().ok())
+            .ok_or_else(|| Error::new("failed to parse timestamp"))?,
+    ))
+}
+
+fn timezone(contents: &[u8]) -> IResult<&[u8], [u8; 5], Error> {
+    let (contents, sign) = one_of("+-")(contents)?;
+    let (contents, offset) = take_while_m_n(4, 4, is_digit)(contents)?;
+    let (contents, _) = newline(contents)?;
+
+    let mut timezone = [0u8; 5];
+    timezone[0] = sign.try_into().expect("must be + or -");
+    timezone[1..].copy_from_slice(offset);
+
+    Ok((contents, timezone))
+}
+
+fn message(contents: &[u8]) -> IResult<&[u8], String, Error> {
+    let (contents, _) = newline(contents)?;
+
+    Ok((b"", String::from_utf8_lossy(contents).into()))
 }

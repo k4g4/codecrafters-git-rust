@@ -35,8 +35,14 @@ enum Cmd {
     /// Initialize an empty repository
     Init(cmds::init::Args),
 
+    /// Clone a remote repository
+    Clone(cmds::clone::Args),
+
     /// Create a commit in the repository
     Commit(cmds::commit::Args),
+
+    /// Display the commit log
+    Log(cmds::log::Args),
 
     /// Get and set configurations
     Config(cmds::config::Args),
@@ -93,5 +99,11 @@ fn main() -> anyhow::Result<()> {
         Cmd::Config(args) => cmds::config::config(args.into(), stdout),
 
         Cmd::Commit(cmds::commit::Args { message }) => cmds::commit::commit(message, stdout),
+
+        Cmd::Log(cmds::log::Args { oneline, hash }) => {
+            cmds::log::log(oneline, hash.as_deref(), stdout)
+        }
+
+        Cmd::Clone(cmds::clone::Args {}) => cmds::clone::clone(stdout),
     }
 }

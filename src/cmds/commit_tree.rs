@@ -4,10 +4,7 @@ use anyhow::Context;
 use flate2::read::ZlibEncoder;
 use sha1::{Digest, Sha1};
 
-use crate::{
-    utils::{self, find_object, get_config_value},
-    SHA_DISPLAY_LEN,
-};
+use crate::{utils, SHA_DISPLAY_LEN};
 
 use super::write_tree::write_tree;
 
@@ -31,18 +28,18 @@ pub fn commit_tree(
     tree_hash: Option<&str>,
     mut output: impl Write,
 ) -> anyhow::Result<()> {
-    let name = get_config_value("user", "name")?.unwrap_or_else(|| "Anonymous".into());
-    let email = get_config_value("user", "email")?.unwrap_or_else(|| "N/A".into());
+    let name = utils::get_config_value("user", "name")?.unwrap_or_else(|| "Anonymous".into());
+    let email = utils::get_config_value("user", "email")?.unwrap_or_else(|| "N/A".into());
 
     // hacky way to get the full hash if the hash is abbreviated
-    let get_full_hash = |hash| -> anyhow::Result<_> {
-        let hash = find_object(hash).context("failed to find parent")?;
+    let get_full_hash = |hash: &str| -> anyhow::Result<_> {
+        let hash = utils::find_object(hash.trim()).context("failed to find parent")?;
         let hash = hash.to_str().expect("path is utf-8").replace('/', "");
         Ok(hash[hash.len() - SHA_DISPLAY_LEN..].to_owned())
     };
 
     let mut contents = vec![];
-    write!(&mut contents, "tree ")?;
+    write!(contents, "tree ")?;
 
     if let Some(tree_hash) = tree_hash {
         let tree_hash = get_full_hash(tree_hash)?;
@@ -84,9 +81,9 @@ pub fn commit_tree(
     io::copy(&mut compressor, &mut file)?;
 
     for byte in hash {
-        write!(&mut output, "{byte:02x}")?;
+        write!(output, "{byte:02x}")?;
     }
-    writeln!(&mut output)?;
+    writeln!(output)?;
 
     Ok(())
 }
