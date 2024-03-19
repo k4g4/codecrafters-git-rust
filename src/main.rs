@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, path::Path};
 
 use clap::{Parser, Subcommand};
 
@@ -104,6 +104,8 @@ fn main() -> anyhow::Result<()> {
             cmds::log::log(oneline, hash.as_deref(), stdout)
         }
 
-        Cmd::Clone(cmds::clone::Args {}) => cmds::clone::clone(stdout),
+        Cmd::Clone(cmds::clone::Args { remote, path }) => {
+            cmds::clone::clone(&remote, path.as_deref().unwrap_or(Path::new(".")), stdout)
+        }
     }
 }
