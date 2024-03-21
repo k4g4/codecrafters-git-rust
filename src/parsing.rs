@@ -2,7 +2,7 @@ use std::fmt;
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_until, take_while_m_n},
+    bytes::complete::{tag, take_until1, take_while_m_n},
     character::{
         complete::{char, digit1, newline, one_of},
         is_digit, is_hex_digit,
@@ -189,7 +189,7 @@ fn mode(object: &[u8]) -> IResult<&[u8], u32, Error> {
 }
 
 fn name(object: &[u8]) -> IResult<&[u8], String, Error> {
-    let (object, name) = take_until("\0")(object)?;
+    let (object, name) = take_until1("\0")(object)?;
 
     Ok((object, String::from_utf8_lossy(name).into_owned()))
 }
@@ -255,9 +255,9 @@ fn parent(contents: &[u8]) -> IResult<&[u8], [u8; SHA_DISPLAY_LEN], Error> {
 
 fn author(contents: &[u8]) -> IResult<&[u8], String, Error> {
     let (contents, _) = tag(b"author ")(contents)?;
-    let (contents, name) = take_until(" <")(contents)?;
+    let (contents, name) = take_until1(" <")(contents)?;
     let (contents, _) = tag(b" <")(contents)?;
-    let (contents, email) = take_until("> ")(contents)?;
+    let (contents, email) = take_until1("> ")(contents)?;
     let (contents, _) = tag(b"> ")(contents)?;
 
     Ok((
@@ -271,7 +271,7 @@ fn author(contents: &[u8]) -> IResult<&[u8], String, Error> {
 }
 
 fn committer(contents: &[u8]) -> IResult<&[u8], (), Error> {
-    let (contents, _) = take_until("\n")(contents)?;
+    let (contents, _) = take_until1("\n")(contents)?;
     let (contents, _) = newline(contents)?;
 
     Ok((contents, ()))
@@ -306,4 +306,43 @@ fn message(contents: &[u8]) -> IResult<&[u8], String, Error> {
     let (contents, _) = newline(contents)?;
 
     Ok((b"", String::from_utf8_lossy(contents).into()))
+}
+
+pub fn http_response_body<'a>(
+    service: &'a str,
+) -> impl Fn(&'a [u8]) -> IResult<&[u8], Vec<([u8; SHA_DISPLAY_LEN], &str)>, Error> {
+    move |contents| {
+        let (contents, _) = pkt_line(contents)?;
+        let (contents, _) = tag("# service=")(contents)?;
+        let (contents, _) = tag(service)(contents)?;
+        let (contents, _) = newline(contents)?;
+        let (contents, _) = tag("0000")(contents)?;
+        let (contents, _) = take_until1("\n")(contents)?;
+        let (contents, _) = newline(contents)?;
+        let (contents, refs) = many0(ref_record)(contents)?;
+        let (contents, _) = tag("0000")(contents)?;
+
+        Ok((contents, refs))
+    }
+}
+
+fn pkt_line(contents: &[u8]) -> IResult<&[u8], &[u8], Error> {
+    take_while_m_n(4, 4, is_hex_digit)(contents)
+}
+
+fn ref_record(contents: &[u8]) -> IResult<&[u8], ([u8; SHA_DISPLAY_LEN], &str), Error> {
+    let (contents, _) = pkt_line(contents)?;
+    let (contents, hash) = hex_hash(contents)?;
+    let (contents, _) = char(' ')(contents)?;
+    let (contents, name) = take_until1("\n")(contents)?;
+    let (contents, _) = newline(contents)?;
+    // ignore peeling for now
+
+    Ok((
+        contents,
+        (
+            hash,
+            std::str::from_utf8(name).map_err(|_| Error::new("ref name is not UTF-8"))?,
+        ),
+    ))
 }

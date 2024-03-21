@@ -160,11 +160,11 @@ pub fn update_head(commit_hash: &str) -> anyhow::Result<()> {
 pub fn get_config_value(section: &str, key: &str) -> anyhow::Result<Option<String>> {
     Ok(read_config()?
         .into_iter()
-        .find_map(|(s, keys_values)| (s == section).then(|| keys_values))
+        .find_map(|(s, keys_values)| (s == section).then_some(keys_values))
         .and_then(|keys_values| {
             keys_values
                 .into_iter()
-                .find_map(|(k, value)| (k == key).then(|| value))
+                .find_map(|(k, value)| (k == key).then_some(value))
         }))
 }
 
@@ -173,7 +173,7 @@ pub fn set_config_value(section: &str, key: &str, value: String) -> anyhow::Resu
 
     let search_result = config
         .iter_mut()
-        .find_map(|(s, keys_values)| (section == s).then(|| keys_values));
+        .find_map(|(s, keys_values)| (section == s).then_some(keys_values));
 
     let keys_values = if let Some(keys_values) = search_result {
         keys_values
@@ -185,7 +185,7 @@ pub fn set_config_value(section: &str, key: &str, value: String) -> anyhow::Resu
 
     let search_result = keys_values
         .iter_mut()
-        .find_map(|(k, value)| (key == k).then(|| value));
+        .find_map(|(k, value)| (key == k).then_some(value));
 
     if let Some(prev_value) = search_result {
         *prev_value = value;
@@ -211,7 +211,9 @@ pub fn list_config() -> anyhow::Result<String> {
     Ok(list)
 }
 
-fn read_config() -> anyhow::Result<Vec<(String, Vec<(String, String)>)>> {
+type Section = (String, Vec<(String, String)>);
+
+fn read_config() -> anyhow::Result<Vec<Section>> {
     let Ok(config) = fs::read_to_string(Path::new(DOT_GIT).join(CONFIG)) else {
         return Ok(vec![]);
     };
@@ -238,7 +240,7 @@ fn read_config() -> anyhow::Result<Vec<(String, Vec<(String, String)>)>> {
     Ok(sections)
 }
 
-fn write_config(config: Vec<(String, Vec<(String, String)>)>) -> anyhow::Result<()> {
+fn write_config(config: Vec<Section>) -> anyhow::Result<()> {
     let mut config_file = File::create(Path::new(DOT_GIT).join(CONFIG))?;
 
     for (section, keys_values) in config {
