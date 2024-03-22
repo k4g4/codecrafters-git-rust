@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     fs,
     io::{self, Read, Write},
     path::PathBuf,
@@ -30,12 +31,13 @@ pub struct SourceArgs {
     pub stdin: bool,
 }
 
-pub enum Source {
+pub enum Source<'buf> {
     Path(PathBuf),
+    Buf(&'buf [u8]),
     Stdin,
 }
 
-impl From<SourceArgs> for Source {
+impl From<SourceArgs> for Source<'_> {
     fn from(SourceArgs { path, stdin }: SourceArgs) -> Self {
         match (path, stdin) {
             (None, true) => Self::Stdin,
@@ -54,12 +56,13 @@ pub fn hash_object(
     mut output: impl Write,
 ) -> anyhow::Result<()> {
     let contents = match source {
-        Source::Path(path) => fs::read(path)?,
+        Source::Path(path) => Cow::Owned(fs::read(path)?),
         Source::Stdin => {
             let mut buf = vec![];
             io::stdin().read_to_end(&mut buf)?;
-            buf
+            Cow::Owned(buf)
         }
+        Source::Buf(buf) => Cow::Borrowed(buf),
     };
     let header = format!("blob {}\0", contents.len());
 
@@ -68,10 +71,7 @@ pub fn hash_object(
     // could optimize this function by writing directly to a file and
     // the hasher at the same time, then moving the file to the final location.
     // would prevent needing the 'contents' in-memory buffer.
-    io::copy(
-        &mut header.as_bytes().chain(contents.as_slice()),
-        &mut hasher,
-    )?;
+    io::copy(&mut header.as_bytes().chain(contents.as_ref()), &mut hasher)?;
 
     let hash = hasher.finalize();
     if as_hex {
@@ -87,7 +87,7 @@ pub fn hash_object(
         let mut file = utils::create_object(&hash.into())?;
 
         let mut compressor = ZlibEncoder::new(
-            header.as_bytes().chain(contents.as_slice()),
+            header.as_bytes().chain(contents.as_ref()),
             Default::default(), // default compression is level 6
         );
 

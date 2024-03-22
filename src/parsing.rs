@@ -308,7 +308,7 @@ fn message(contents: &[u8]) -> IResult<&[u8], String, Error> {
     Ok((b"", String::from_utf8_lossy(contents).into()))
 }
 
-pub fn http_response_body<'a>(
+pub fn advertisement_response<'a>(
     service: &'a str,
 ) -> impl Fn(&'a [u8]) -> IResult<&[u8], Vec<([u8; SHA_DISPLAY_LEN], &str)>, Error> {
     move |contents| {
@@ -345,4 +345,8 @@ fn ref_record(contents: &[u8]) -> IResult<&[u8], ([u8; SHA_DISPLAY_LEN], &str), 
             std::str::from_utf8(name).map_err(|_| Error::new("ref name is not UTF-8"))?,
         ),
     ))
+}
+
+pub fn pack_file_response(contents: &[u8]) -> IResult<&[u8], &[u8], Error> {
+    tag("0008NAK\n")(contents)
 }
