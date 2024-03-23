@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
             write,
             r#type,
             source,
-        }) => cmds::hash_object::hash_object(true, r#type, source.into(), true, stdout),
+        }) => cmds::hash_object::hash_object(write, r#type, source.into(), true, stdout),
 
         Cmd::LsTree(cmds::ls_tree::Args {
             recurse,

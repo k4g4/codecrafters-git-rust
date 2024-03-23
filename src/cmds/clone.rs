@@ -28,7 +28,7 @@ pub struct Args {
     pub path: Option<PathBuf>,
 }
 
-pub fn clone(remote: &str, path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()> {
+pub fn clone(remote: &str, path: impl AsRef<Path>, mut _output: impl Write) -> anyhow::Result<()> {
     cmds::init::init(&path, io::sink())?;
     env::set_current_dir(path)?;
 
@@ -154,51 +154,51 @@ pub fn clone(remote: &str, path: impl AsRef<Path>, mut output: impl Write) -> an
                     objects.insert(hash, (mem::take(&mut decompressed), r#type));
                 }
 
-                (Some(delta_ref), _) => {
+                (Some(_delta_ref), _) => {
                     continue;
-                    let Some(&(ref old_object, r#type)) = objects.get(delta_ref) else {
-                        anyhow::bail!("failed to find reference in packfile")
-                    };
+                    // let Some(&(ref old_object, r#type)) = objects.get(delta_ref) else {
+                    //     anyhow::bail!("failed to find reference in packfile")
+                    // };
 
-                    let mut new_object = Vec::with_capacity(old_object.len());
-                    let mut delta_iter = decompressed.iter();
+                    // let mut new_object = Vec::with_capacity(old_object.len());
+                    // let mut delta_iter = decompressed.iter();
 
-                    // skip the size integers
-                    delta_iter
-                        .by_ref()
-                        .take_while(|&&byte| byte >= 128)
-                        .for_each(|_| ());
-                    delta_iter
-                        .by_ref()
-                        .take_while(|&&byte| byte >= 128)
-                        .for_each(|_| ());
+                    // // skip the size integers
+                    // delta_iter
+                    //     .by_ref()
+                    //     .take_while(|&&byte| byte >= 128)
+                    //     .for_each(|_| ());
+                    // delta_iter
+                    //     .by_ref()
+                    //     .take_while(|&&byte| byte >= 128)
+                    //     .for_each(|_| ());
 
-                    while let Some(&byte) = delta_iter.next() {
-                        if byte < 128 {
-                            // INSERT
-                            let inserting = byte as usize & 0b0111_1111;
-                            new_object.extend(delta_iter.by_ref().take(inserting));
-                        } else {
-                            // COPY
-                            let _bytes_to_read = byte as usize & 0b0000_1111;
-                        }
-                    }
+                    // while let Some(&byte) = delta_iter.next() {
+                    //     if byte < 128 {
+                    //         // INSERT
+                    //         let inserting = byte as usize & 0b0111_1111;
+                    //         new_object.extend(delta_iter.by_ref().take(inserting));
+                    //     } else {
+                    //         // COPY
+                    //         let _bytes_to_read = byte as usize & 0b0000_1111;
+                    //     }
+                    // }
 
-                    let mut hash = [0u8; SHA_LEN];
-                    cmds::hash_object::hash_object(
-                        true,
-                        r#type,
-                        cmds::hash_object::Source::Buf(&new_object),
-                        false,
-                        hash.as_mut(),
-                    )?;
+                    // let mut hash = [0u8; SHA_LEN];
+                    // cmds::hash_object::hash_object(
+                    //     true,
+                    //     r#type,
+                    //     cmds::hash_object::Source::Buf(&new_object),
+                    //     false,
+                    //     hash.as_mut(),
+                    // )?;
 
-                    objects.insert(hash, (new_object, r#type));
+                    // objects.insert(hash, (new_object, r#type));
                 }
 
-                (_, Some(delta_offset_index)) => {
+                (_, Some(_delta_offset_index)) => {
                     continue;
-                    writeln!(output, "OFFSET INDEX {delta_offset_index}")?;
+                    // writeln!(output, "OFFSET INDEX {delta_offset_index}")?;
                 }
             }
         }
