@@ -1,5 +1,7 @@
 use std::{
+    collections::HashMap,
     io::{self, Write},
+    mem,
     path::{Path, PathBuf},
 };
 
@@ -8,6 +10,7 @@ use flate2::bufread::ZlibDecoder;
 use tokio::runtime::Runtime;
 
 use crate::{
+    cmds,
     parsing::{self, pack_file_response},
     SHA_LEN,
 };
@@ -23,8 +26,6 @@ pub struct Args {
     /// Repository path
     pub path: Option<PathBuf>,
 }
-
-enum ObjectMetadata {}
 
 pub fn clone(remote: &str, _path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()> {
     Runtime::new()?.block_on(async {
@@ -87,9 +88,11 @@ pub fn clone(remote: &str, _path: impl AsRef<Path>, mut output: impl Write) -> a
         let mut index = 12;
         let mut decompressor = ZlibDecoder::new(Default::default());
         let mut decompressed = vec![];
-        let mut delta_ref: Option<[u8; SHA_LEN]> = None;
-        let mut delta_offset = None;
-        loop {
+        let mut objects = HashMap::new();
+        let mut delta_ref;
+        let mut delta_offset_index;
+
+        while pack[index..].len() > 20 {
             let object_type = pack[index] << 1 >> 5;
             let mut size = pack[index] as u64 & 0b0000_1111;
             let mut shift = 4;
@@ -100,6 +103,7 @@ pub fn clone(remote: &str, _path: impl AsRef<Path>, mut output: impl Write) -> a
             }
             index += 1;
 
+            (delta_ref, delta_offset_index) = (None, None);
             if object_type == OBJ_TYPE_OFFSET_DELTA {
                 let mut offset = pack[index] as u64 & 0b0111_1111;
                 let mut shift = 7;
@@ -109,9 +113,9 @@ pub fn clone(remote: &str, _path: impl AsRef<Path>, mut output: impl Write) -> a
                     shift += 7;
                 }
                 index += 1;
-                delta_offset = Some(index - offset as usize);
+                delta_offset_index = Some(index - offset as usize);
             } else if object_type == OBJ_TYPE_REF_DELTA {
-                delta_ref = Some(pack[index..SHA_LEN].try_into().expect("lengths match"));
+                delta_ref = Some(&pack[index..][..SHA_LEN]);
                 index += SHA_LEN;
             }
 
@@ -122,8 +126,77 @@ pub fn clone(remote: &str, _path: impl AsRef<Path>, mut output: impl Write) -> a
             }
             let out = decompressor.total_out();
             anyhow::ensure!(size == out, "decompressed data does not match object size");
-            let bytes_read = decompressor.total_in();
-            writeln!(output, "compressed: {bytes_read}")?;
+            index += decompressor.total_in() as usize;
+
+            match (delta_ref, delta_offset_index) {
+                (None, None) => {
+                    let r#type = match object_type {
+                        1 => cmds::hash_object::Type::Commit,
+                        2 => cmds::hash_object::Type::Tree,
+                        3 => cmds::hash_object::Type::Blob,
+                        4 => cmds::hash_object::Type::Tag,
+                        _ => unreachable!("no other object types reachable"),
+                    };
+
+                    let mut hash = [0u8; SHA_LEN];
+                    cmds::hash_object::hash_object(
+                        true,
+                        r#type,
+                        cmds::hash_object::Source::Buf(&decompressed),
+                        false,
+                        hash.as_mut(),
+                    )?;
+
+                    objects.insert(hash, (mem::take(&mut decompressed), r#type));
+                }
+
+                (Some(delta_ref), _) => {
+                    continue;
+                    let Some(&(ref old_object, r#type)) = objects.get(delta_ref) else {
+                        anyhow::bail!("failed to find reference in packfile")
+                    };
+
+                    let mut new_object = Vec::with_capacity(old_object.len());
+                    let mut delta_iter = decompressed.iter();
+
+                    // skip the size integers
+                    delta_iter
+                        .by_ref()
+                        .take_while(|&&byte| byte >= 128)
+                        .for_each(|_| ());
+                    delta_iter
+                        .by_ref()
+                        .take_while(|&&byte| byte >= 128)
+                        .for_each(|_| ());
+
+                    while let Some(&byte) = delta_iter.next() {
+                        if byte < 128 {
+                            // INSERT
+                            let inserting = byte as usize & 0b0111_1111;
+                            new_object.extend(delta_iter.by_ref().take(inserting));
+                        } else {
+                            // COPY
+                            let _bytes_to_read = byte as usize & 0b0000_1111;
+                        }
+                    }
+
+                    let mut hash = [0u8; SHA_LEN];
+                    cmds::hash_object::hash_object(
+                        true,
+                        r#type,
+                        cmds::hash_object::Source::Buf(&new_object),
+                        false,
+                        hash.as_mut(),
+                    )?;
+
+                    objects.insert(hash, (new_object, r#type));
+                }
+
+                (_, Some(delta_offset_index)) => {
+                    continue;
+                    writeln!(output, "OFFSET INDEX {delta_offset_index}")?;
+                }
+            }
         }
 
         Ok(())

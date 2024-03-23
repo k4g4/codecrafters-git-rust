@@ -66,8 +66,9 @@ mod tests {
 
         let mut output = vec![];
         hash_object::hash_object(
-            hash_object::Source::Path(PathBuf::from(file)),
             true,
+            hash_object::Type::Blob,
+            hash_object::Source::Path(PathBuf::from(file)),
             true,
             &mut output,
         )

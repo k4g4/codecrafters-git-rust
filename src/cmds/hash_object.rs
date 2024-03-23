@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    fs,
+    fmt, fs,
     io::{self, Read, Write},
     path::PathBuf,
 };
@@ -16,8 +16,31 @@ pub struct Args {
     #[arg(short)]
     pub write: bool,
 
+    /// Object type
+    #[arg(short, value_enum, default_value_t = Type::Blob)]
+    pub r#type: Type,
+
     #[command(flatten)]
     pub source: SourceArgs,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum Type {
+    Blob,
+    Commit,
+    Tree,
+    Tag,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::Blob => write!(f, "blob"),
+            Type::Commit => write!(f, "commit"),
+            Type::Tree => write!(f, "tree"),
+            Type::Tag => write!(f, "tag"),
+        }
+    }
 }
 
 #[derive(clap::Args)]
@@ -50,8 +73,9 @@ impl From<SourceArgs> for Source<'_> {
 /// Prints the sha1 hash of a file, and writes it to the .git
 /// database as a blob if `write == true`.
 pub fn hash_object(
-    source: Source,
     write: bool,
+    r#type: Type,
+    source: Source,
     as_hex: bool,
     mut output: impl Write,
 ) -> anyhow::Result<()> {
@@ -64,7 +88,8 @@ pub fn hash_object(
         }
         Source::Buf(buf) => Cow::Borrowed(buf),
     };
-    let header = format!("blob {}\0", contents.len());
+
+    let header = format!("{type} {}\0", contents.len());
 
     let mut hasher = Sha1::new();
 

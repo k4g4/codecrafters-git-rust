@@ -52,8 +52,9 @@ fn write_tree_at(path: impl AsRef<Path>) -> anyhow::Result<[u8; SHA_LEN]> {
                 } else {
                     let mut hash = [0u8; SHA_LEN];
                     super::hash_object::hash_object(
-                        super::hash_object::Source::Path(entry.path()),
                         true,
+                        super::hash_object::Type::Blob,
+                        super::hash_object::Source::Path(entry.path()),
                         false,
                         hash.as_mut(),
                     )?;

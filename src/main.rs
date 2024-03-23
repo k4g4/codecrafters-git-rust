@@ -76,9 +76,11 @@ fn main() -> anyhow::Result<()> {
             cmds::cat_file::cat_file(info.into(), &hash, stdout)
         }
 
-        Cmd::HashObject(cmds::hash_object::Args { write, source }) => {
-            cmds::hash_object::hash_object(source.into(), write, true, stdout)
-        }
+        Cmd::HashObject(cmds::hash_object::Args {
+            write,
+            r#type,
+            source,
+        }) => cmds::hash_object::hash_object(true, r#type, source.into(), true, stdout),
 
         Cmd::LsTree(cmds::ls_tree::Args {
             recurse,
