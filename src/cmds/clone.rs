@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    env,
     io::{self, Write},
     mem,
     path::{Path, PathBuf},
@@ -27,7 +28,10 @@ pub struct Args {
     pub path: Option<PathBuf>,
 }
 
-pub fn clone(remote: &str, _path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()> {
+pub fn clone(remote: &str, path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()> {
+    cmds::init::init(&path, io::sink())?;
+    env::set_current_dir(path)?;
+
     Runtime::new()?.block_on(async {
         let remote = remote.trim_end_matches('/');
         let service = "git-upload-pack";
