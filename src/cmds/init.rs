@@ -24,7 +24,7 @@ pub fn init(path: impl AsRef<Path>, mut output: impl Write) -> anyhow::Result<()
 \tlogallrefupdates = true
 ";
 
-    fs::create_dir(&path)
+    fs::create_dir_all(&path)
         .and_then(|_| fs::create_dir(path.join(OBJECTS)))
         .and_then(|_| fs::create_dir(path.join(REFS)))
         .and_then(|_| fs::create_dir(path.join(REFS).join(HEADS)))
